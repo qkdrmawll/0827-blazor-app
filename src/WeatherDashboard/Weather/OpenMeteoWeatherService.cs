@@ -164,6 +164,7 @@ public sealed class OpenMeteoWeatherService(IHttpClientFactory httpClientFactory
                 hourly.PrecipitationProbability[index],
                 WmoWeatherCodeMapper.Map(hourly.WeatherCode[index])))
             .Where(item => item.Time >= currentTime)
+            .Take(8)
             .ToArray();
         var dailyForecast = Enumerable.Range(0, daily.Time.Length)
             .Select(index => new DailyWeather(
