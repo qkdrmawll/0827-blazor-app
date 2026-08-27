@@ -1,7 +1,211 @@
 ﻿@page "/"
+@using System.Globalization
+@using WeatherDashboard.Weather
+@inject IWeatherService WeatherService
 
-<PageTitle>Weather Dashboard</PageTitle>
+<PageTitle>날씨 대시보드</PageTitle>
 
-<h1>Weather Dashboard</h1>
+<main class="weather-page">
+    <header class="hero">
+        <div>
+            <p class="eyebrow">WEATHER FORECAST</p>
+            <h1>오늘의 날씨</h1>
+            <p class="hero-copy">도시를 검색하고 지금부터의 날씨를 한눈에 확인하세요.</p>
+        </div>
 
-<p>Open-Meteo weather dashboard foundation.</p>
+        <form class="search-form" @onsubmit="SearchAsync" @onsubmit:preventDefault="true" aria-label="도시 날씨 검색">
+            <label for="city-search">도시 검색</label>
+            <div class="search-controls">
+                <input id="city-search"
+                       type="search"
+                       name="city"
+                       @bind="searchQuery"
+                       placeholder="서울, Tokyo, London"
+                       autocomplete="off"
+                       aria-describedby="search-help search-error"
+                       disabled="@isLoading" />
+                <button type="submit" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <span class="button-spinner" aria-hidden="true"></span>
+                        <span>조회 중</span>
+                    }
+                    else
+                    {
+                        <span aria-hidden="true">⌕</span>
+                        <span>검색</span>
+                    }
+                </button>
+            </div>
+            <span id="search-help" class="search-help">한국어와 영어 도시명을 모두 사용할 수 있습니다.</span>
+            @if (errorMessage is not null)
+            {
+                <p id="search-error" class="search-error" role="alert">@errorMessage</p>
+            }
+        </form>
+    </header>
+
+    <div class="status-region" role="status" aria-live="polite" aria-atomic="true">
+        @if (isLoading)
+        {
+            <span>@searchQuery 날씨를 불러오는 중입니다.</span>
+        }
+    </div>
+
+    @if (forecast is not null)
+    {
+        <section class="current-card" aria-labelledby="current-heading">
+            <div class="current-summary">
+                <p class="location-label">현재 위치</p>
+                <h2 id="current-heading">@forecast.Location.DisplayName</h2>
+                <p class="observed-time">@forecast.Current.Time.ToString("M월 d일 dddd HH:mm", KoreanCulture) 기준</p>
+                <div class="condition">
+                    <span class="current-emoji" aria-hidden="true">@forecast.Current.Condition.Emoji</span>
+                    <div>
+                        <strong class="current-temperature numeric">@FormatTemperature(forecast.Current.TemperatureCelsius)</strong>
+                        <p>@forecast.Current.Condition.Description</p>
+                    </div>
+                </div>
+            </div>
+
+            <dl class="current-details">
+                <div>
+                    <dt>체감온도</dt>
+                    <dd class="numeric">@FormatTemperature(forecast.Current.ApparentTemperatureCelsius)</dd>
+                </div>
+                <div>
+                    <dt>습도</dt>
+                    <dd class="numeric">@forecast.Current.RelativeHumidityPercent%</dd>
+                </div>
+                <div>
+                    <dt>풍속</dt>
+                    <dd class="numeric">@forecast.Current.WindSpeedMetersPerSecond.ToString("0.0") m/s</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="forecast-section" aria-labelledby="hourly-heading">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">HOURLY</p>
+                    <h2 id="hourly-heading">시간별 예보</h2>
+                </div>
+                <p>현재 이후 8시간</p>
+            </div>
+
+            <div class="hourly-grid">
+                @foreach (var hour in forecast.Hourly.Take(8))
+                {
+                    <article class="hour-card">
+                        <time datetime="@hour.Time.ToString("O")">@hour.Time.ToString("HH시")</time>
+                        <span class="forecast-emoji" aria-hidden="true">@hour.Condition.Emoji</span>
+                        <span class="visually-hidden">@hour.Condition.Description</span>
+                        <strong class="numeric">@FormatTemperature(hour.TemperatureCelsius)</strong>
+                        <span class="precipitation numeric" aria-label="강수확률 @hour.PrecipitationProbabilityPercent 퍼센트">
+                            <span aria-hidden="true">💧</span> @hour.PrecipitationProbabilityPercent%
+                        </span>
+                    </article>
+                }
+            </div>
+        </section>
+
+        <section class="forecast-section" aria-labelledby="daily-heading">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">DAILY</p>
+                    <h2 id="daily-heading">5일 예보</h2>
+                </div>
+                <p>오늘부터 5일</p>
+            </div>
+
+            <div class="daily-list">
+                @foreach (var day in forecast.Daily.Take(5))
+                {
+                    <article class="day-row">
+                        <div class="day-name">
+                            <strong>@GetDayLabel(day.Date)</strong>
+                            <time datetime="@day.Date.ToString("O")">@day.Date.ToString("M/d")</time>
+                        </div>
+                        <div class="day-condition">
+                            <span class="forecast-emoji" aria-hidden="true">@day.Condition.Emoji</span>
+                            <span>@day.Condition.Description</span>
+                        </div>
+                        <span class="precipitation numeric" aria-label="강수확률 @day.PrecipitationProbabilityPercent 퍼센트">
+                            <span aria-hidden="true">💧</span> @day.PrecipitationProbabilityPercent%
+                        </span>
+                        <div class="temperature-range numeric" aria-label="최고 @FormatTemperature(day.MaximumTemperatureCelsius), 최저 @FormatTemperature(day.MinimumTemperatureCelsius)">
+                            <strong>@FormatTemperature(day.MaximumTemperatureCelsius)</strong>
+                            <span>@FormatTemperature(day.MinimumTemperatureCelsius)</span>
+                        </div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+</main>
+
+@code {
+    private static readonly CultureInfo KoreanCulture = CultureInfo.GetCultureInfo("ko-KR");
+    private string searchQuery = "서울";
+    private WeatherForecast? forecast;
+    private string? errorMessage;
+    private bool isLoading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadForecastAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        if (isLoading)
+        {
+            return;
+        }
+
+        await LoadForecastAsync();
+    }
+
+    private async Task LoadForecastAsync()
+    {
+        var query = searchQuery.Trim();
+        if (query.Length == 0)
+        {
+            errorMessage = "검색할 도시 이름을 입력해 주세요.";
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            forecast = await WeatherService.GetForecastAsync(query);
+            searchQuery = query;
+        }
+        catch (WeatherLocationNotFoundException)
+        {
+            errorMessage = $"‘{query}’에 해당하는 도시를 찾지 못했습니다. 이름을 확인해 주세요.";
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "날씨 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = "날씨 조회 시간이 초과되었습니다. 다시 시도해 주세요.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string FormatTemperature(double temperature) => $"{temperature:0.#}°";
+
+    private static string GetDayLabel(DateOnly date)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        return date == today ? "오늘" : date.ToString("ddd", KoreanCulture);
+    }
+}
